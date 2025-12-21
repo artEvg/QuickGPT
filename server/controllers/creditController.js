@@ -10,7 +10,7 @@ const plans = [
 		credits: 100,
 		features: [
 			"✨ 100 мощных текстовых запросов",
-			"🖼️ 50 креативных генераций изображений",
+			"🖼️ 50 генераций изображений",
 			"🛡️ Надежная поддержка 24/7",
 			"🚀 Полный доступ к базовым ИИ-моделям",
 		],
@@ -43,7 +43,6 @@ const plans = [
 	},
 ]
 
-// ✅ АВТОМАТИЧЕСКАЯ ПРОВЕРКА КАЖДЫЕ 10 СЕКУНД
 setInterval(async () => {
 	try {
 		console.log("🔄 АВТОПРОВЕРКА запущена...")
@@ -74,14 +73,11 @@ setInterval(async () => {
 						paymentStatus.data.status
 					}`
 				)
-
 				if (paymentStatus.data.status === "succeeded") {
-					// ✅ МЕНЯЕМ СТАТУС
 					transaction.isPaid = true
 					transaction.status = "completed"
 					await transaction.save()
 
-					// ✅ НАЧИСЛЯЕМ КРЕДИТЫ
 					await User.findByIdAndUpdate(transaction.userId._id, {
 						$inc: { credits: transaction.credits },
 					})
