@@ -123,10 +123,13 @@ export const imageMessageController = async (req, res) => {
       isPublished: false
     })
 
+    const enhancedPrompt = enhanceImagePrompt(prompt)
+    
+    console.log("🖼️ Enhanced prompt:", enhancedPrompt.slice(0, 100) + "...")
+
     const width = 3840
     const height = 2160
-    const ultra4KPrompt = `${prompt}, ultra detailed 8k wallpaper, hyper realistic, masterpiece`
-    const imageUrl = `https://image.pollinations.ai/prompt/${encodeURIComponent(ultra4KPrompt)}?width=${width}&height=${height}&seed=${Date.now()}&nologo=true&model=4`
+    const imageUrl = `https://image.pollinations.ai/prompt/${encodeURIComponent(enhancedPrompt)}?width=${width}&height=${height}&seed=${Date.now()}&nologo=true&model=4`
 
     const reply = {
       role: "assistant",
@@ -147,10 +150,107 @@ export const imageMessageController = async (req, res) => {
       success: true,
       reply: {
         role: "assistant",
-        content: "https://image.pollinations.ai/prompt/ultra-detailed-8k-wallpaper-4k-masterpiece?width=3840&height=2160&nologo=true&model=4",
+        content: "https://image.pollinations.ai/prompt/hyper-realistic-portrait-of-a-cat-in-cyberpunk-city-8k-ultra-detailed?width=3840&height=2160&nologo=true&model=4",
         timestamp: Date.now(),
         isImage: true,
       },
     })
   }
+}
+
+const enhanceImagePrompt = (prompt) => {
+  const baseEnhancers = [
+    "hyper realistic", "photorealistic", "ultra detailed", 
+    "8k wallpaper", "professional photography", 
+    "cinematic lighting", "sharp focus", "masterpiece"
+  ]
+
+  const isRussian = /[а-яё]/i.test(prompt)
+  const isEnglish = /[a-z]/i.test(prompt)
+
+  let enhanced = prompt
+
+  if (isRussian && !isEnglish) {
+    enhanced = translateToEnglish(prompt)
+  }
+
+  enhanced += ", " + baseEnhancers.join(", ")
+  
+  enhanced += getStyleEnhancers(prompt)
+  
+  return enhanced.slice(0, 200)
+}
+
+const translateToEnglish = (ruPrompt) => {
+  const translations = {
+    // 🐾 ЖИВОТНЫЕ
+    "кот": "cat", "кошка": "cat", "котёнок": "kitten",
+    "собака": "dog", "щенок": "puppy", "лошадь": "horse",
+    "птица": "bird", "рыба": "fish", "волк": "wolf",
+    "медведь": "bear", "лиса": "fox", "заяц": "rabbit",
+
+    // 👨‍👩‍👧‍👦 ЛЮДИ
+    "мальчик": "boy", "девочка": "girl", "девушка": "young woman",
+    "мужчина": "man", "женщина": "woman", "ребёнок": "child",
+    "старик": "old man", "старуха": "old woman", "семья": "family",
+
+    // 🏔️ ПРИРОДА
+    "горы": "mountains", "гора": "mountain", "альпы": "Alps",
+    "лес": "forest", "дерево": "tree", "река": "river",
+    "море": "ocean", "пляж": "beach", "озеро": "lake",
+    "водопад": "waterfall", "небо": "sky", "облака": "clouds",
+    "закат": "sunset", "рассвет": "sunrise", "луна": "moon",
+
+    // 🚂 ТРАНСПОРТ
+    "поезд": "train", "машина": "car", "мотоцикл": "motorcycle",
+    "самолёт": "airplane", "корабль": "ship", "велосипед": "bicycle",
+    "танк": "tank", "ракета": "rocket", "вертолёт": "helicopter",
+
+    // 🏠 ОБЪЕКТЫ
+    "дом": "house", "замок": "castle", "дворец": "palace",
+    "город": "city", "улица": "street", "мост": "bridge",
+    "башня": "tower", "храм": "temple", "церковь": "church",
+
+    // 🎨 ПРОФЕССИИ/ДЕЙСТВИЯ
+    "фотограф": "photographer", "художник": "artist", 
+    "музыкант": "musician", "воин": "warrior", "волшебник": "wizard",
+
+    // 🌈 СТИЛИ/ЖАНРЫ
+    "портрет": "portrait", "пейзаж": "landscape", "натюрморт": "still life",
+    "киберпанк": "cyberpunk", "футуристический": "futuristic",
+    "фэнтези": "fantasy", "реализм": "realism", "аниме": "anime",
+    "стимпанк": "steampunk", "барокко": "baroque", "минимализм": "minimalism"
+  }
+
+  let enPrompt = ruPrompt.toLowerCase()
+  for (const [ru, en] of Object.entries(translations)) {
+    if (en) {
+      enPrompt = enPrompt.replace(new RegExp(ru, 'gi'), en)
+    }
+  }
+  
+  if (ruPrompt.includes("горы") || ruPrompt.includes("фотограф")) {
+    enPrompt = enPrompt.replace(/\b(?:house|building|дом|здание)\b/gi, "")
+  }
+  
+  return enPrompt.charAt(0).toUpperCase() + enPrompt.slice(1)
+}
+
+const getStyleEnhancers = (prompt) => {
+  const styles = {
+    cyberpunk: ["neon lights", "rainy night", "holograms"],
+    portrait: ["studio lighting", "dramatic shadows", "high contrast"],
+    landscape: ["golden hour", "atmospheric perspective", "volumetric lighting"],
+    futuristic: ["sci-fi", "metallic surfaces", "energy glow"],
+    fantasy: ["ethereal glow", "magical aura", "mystical atmosphere"]
+  }
+
+  const lowerPrompt = prompt.toLowerCase()
+  for (const [theme, enhancers] of Object.entries(styles)) {
+    if (lowerPrompt.includes(theme)) {
+      return ", " + enhancers.join(", ")
+    }
+  }
+  
+  return ""
 }
