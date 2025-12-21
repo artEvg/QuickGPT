@@ -150,7 +150,7 @@ export const purchasePlan = async (req, res) => {
       },
       confirmation: {
         type: "redirect",
-        return_url: `${process.env.BASE_URL || "http://localhost:3000"}/dashboard`,
+        return_url: `${process.env.BASE_URL || "https://quick-gpt-client-livid.vercel.app/"}/dashboard`,
       },
       capture: true,
       description: `План ${plan.name} (${plan.credits} кредитов)`,
