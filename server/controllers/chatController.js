@@ -1,59 +1,73 @@
 import Chat from "../models/Chat.js"
 
-// API for create a new chat
 export const createChat = async (req, res) => {
 	try {
-		const userId = req.user._id
+		console.log("🆕 createChat для:", req.user.email)
+
 		const chatData = {
-			userId,
-			messages: [],
-			name: "Новый чат",
+			userId: req.user.id.toString(),
 			userName: req.user.name,
+			name: "Новый чат",
+			messages: [],
 		}
-		await Chat.create(chatData)
+
+		const newChat = await Chat.create(chatData)
+		console.log("✅ Чат создан:", newChat._id)
+
 		res.json({
 			success: true,
+			chat: newChat,
 			message: "Чат успешно создан",
 		})
 	} catch (error) {
-		res.json({
+		console.error("❌ createChat error:", error)
+		res.status(500).json({
 			success: false,
 			message: error.message,
 		})
 	}
 }
 
-// API for get all chats
+
 export const getChats = async (req, res) => {
 	try {
-		const userId = req.user._id
-		const chats = await Chat.find({ userId }).sort({ updatedAt: -1 })
+		console.log("📋 getChats для:", req.user.email)
+
+		const chats = await Chat.find({
+			userId: req.user.id.toString(),
+		}).sort({ updatedAt: -1 })
+
+		console.log("📋 Найдено чатов:", chats.length)
 
 		res.json({
 			success: true,
 			chats,
 		})
 	} catch (error) {
-		res.json({
+		console.error("❌ getChats error:", error)
+		res.status(500).json({
 			success: false,
 			message: error.message,
 		})
 	}
 }
 
-// API for delete chat
+// ✅ deleteChat
 export const deleteChat = async (req, res) => {
 	try {
-		const userId = req.user._id
 		const { chatId } = req.body
-		await Chat.deleteOne({ _id: chatId, userId })
+		const result = await Chat.deleteOne({
+			_id: chatId,
+			userId: req.user.id.toString(),
+		})
 
 		res.json({
 			success: true,
-			message: "Чат успешно удален",
+			message: `Чат удален (${result.deletedCount})`,
 		})
 	} catch (error) {
-		res.json({
+		console.error("❌ deleteChat error:", error)
+		res.status(500).json({
 			success: false,
 			message: error.message,
 		})
