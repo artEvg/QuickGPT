@@ -43,6 +43,67 @@ const plans = [
 	},
 ]
 
+// ✅ АВТОМАТИЧЕСКАЯ ПРОВЕРКА КАЖДЫЕ 10 СЕКУНД
+setInterval(async () => {
+	try {
+		console.log("🔄 АВТОПРОВЕРКА запущена...")
+
+		const pendingTransactions = await Transaction.find({
+			isPaid: false,
+			yookassaPaymentId: { $exists: true },
+		})
+			.populate("userId")
+			.sort({ createdAt: -1 })
+			.limit(20)
+
+		const shopId = process.env.YUKASSA_SHOP_ID || "1233754"
+		const secretKey =
+			process.env.YUKASSA_SECRET_KEY ||
+			"test_Lrnmshbrf0XxlwtlgId-Fv7q2kCZebvKr7sVkK60sxg"
+
+		let updated = 0
+		for (let transaction of pendingTransactions) {
+			try {
+				const paymentStatus = await axios.get(
+					`https://api.yookassa.ru/v3/payments/${transaction.yookassaPaymentId}`,
+					{ auth: { username: shopId, password: secretKey } }
+				)
+
+				console.log(
+					`🔍 ${transaction._id.toString().slice(-6)}: ${
+						paymentStatus.data.status
+					}`
+				)
+
+				if (paymentStatus.data.status === "succeeded") {
+					// ✅ МЕНЯЕМ СТАТУС
+					transaction.isPaid = true
+					transaction.status = "completed"
+					await transaction.save()
+
+					// ✅ НАЧИСЛЯЕМ КРЕДИТЫ
+					await User.findByIdAndUpdate(transaction.userId._id, {
+						$inc: { credits: transaction.credits },
+					})
+
+					console.log(
+						`🎉 ✅ АВТО! +${transaction.credits} кредитов | План: ${transaction.planId}`
+					)
+					updated++
+				}
+			} catch (error) {
+				// Платеж не найден/ошибка - продолжаем
+			}
+		}
+
+		if (updated > 0) {
+			console.log(`🔥 АВТОПРОВЕРКА: Обновлено ${updated} платежей!`)
+		}
+	} catch (error) {
+		console.error("Автопроверка ошибка:", error)
+	}
+}, 10000) // 10 секунд
+
 export const getPlans = async (req, res) => {
 	res.json({ success: true, plans })
 }
