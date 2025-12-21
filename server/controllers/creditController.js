@@ -44,60 +44,7 @@ const plans = [
 ]
 
 export const getPlans = async (req, res) => {
-	try {
-		const pendingTransactions = await Transaction.find({
-			isPaid: false,
-			yookassaPaymentId: { $exists: true },
-		})
-			.populate("userId")
-			.sort({ createdAt: -1 })
-			.limit(10)
-
-		console.log(`🔍 Найдено НЕОПЛАЧЕННЫХ: ${pendingTransactions.length}`)
-
-		const shopId = "1233754"
-		const secretKey = "test_Lrnmshbrf0XxlwtlgId-Fv7q2kCZebvKr7sVkK60sxg"
-
-		for (let transaction of pendingTransactions) {
-			console.log(
-				`🔍 Проверяем: ${transaction._id
-					.toString()
-					.slice(-6)} | Платеж: ${transaction.yookassaPaymentId.slice(0, 8)}`
-			)
-
-			try {
-				const paymentStatus = await axios.get(
-					`https://api.yookassa.ru/v3/payments/${transaction.yookassaPaymentId}`,
-					{ auth: { username: shopId, password: secretKey } }
-				)
-
-				console.log(
-					`✅ СТАТУС: ${paymentStatus.data.status} | План: ${transaction.planId}`
-				)
-
-				if (paymentStatus.data.status === "succeeded") {
-					transaction.isPaid = true
-					transaction.status = "completed"
-					await transaction.save()
-
-					await User.findByIdAndUpdate(transaction.userId._id, {
-						$inc: { credits: transaction.credits },
-					})
-
-					console.log(
-						`🎉 ✅ ✅ ✅ ПОБЕДА! isPaid=true | +${transaction.credits} кредитов | User: ${transaction.userId._id}`
-					)
-				}
-			} catch (error) {
-				console.log(`❌ Платеж не найден: ${transaction.yookassaPaymentId}`)
-			}
-		}
-
-		res.json({ success: true, plans })
-	} catch (error) {
-		console.error("getPlans error:", error)
-		res.json({ success: true, plans })
-	}
+	res.json({ success: true, plans })
 }
 
 export const purchasePlan = async (req, res) => {
