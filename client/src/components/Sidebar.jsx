@@ -2,11 +2,62 @@ import React, { useEffect, useState } from "react"
 import { useAppContext } from "../context/AppContext.jsx"
 import { assets } from "../assets/assets.js"
 import { DateTime } from "luxon"
+import toast from "react-hot-toast"
 
 const Sidebar = ({ isMenuOpen, setIsMenuOpen }) => {
-	const { chats, setSelectedChat, theme, setTheme, user, navigate } =
-		useAppContext()
+	const {
+		chats,
+		setSelectedChat,
+		theme,
+		setTheme,
+		user,
+		navigate,
+		createNewChat,
+		axios,
+		setChats,
+		fetchUserChats,
+		setToken,
+		token,
+	} = useAppContext()
 	const [search, setSearch] = useState("")
+	const logout = () => {
+		localStorage.removeItem("token")
+		setToken(null)
+		toast.success("Вы вышли из аккаунта")
+	}
+
+	const deleteChat = async (e, chatId) => {
+		try {
+			e.stopPropagation()
+			const confirm = window.confirm("Вы уверены, что хотите удалить чат?")
+			if (!confirm) return
+
+			const { data } = await axios.post(
+				"/api/chat/delete",
+				{ chatId },
+				{
+					headers: {
+						Authorization: `Bearer ${token}`,
+						"Content-Type": "application/json",
+					},
+				}
+			)
+
+			console.log("✅ Delete response:", data)
+
+			if (data.success) {
+				setChats(prev => prev.filter(chat => chat._id !== chatId))
+				toast.success(data.message)
+			}
+		} catch (error) {
+			console.error("❌ Delete error:", {
+				status: error.response?.status,
+				message: error.message,
+				headers: error.config?.headers,
+			})
+			toast.error(error.response?.data?.message || "Ошибка удаления")
+		}
+	}
 
 	return (
 		<div
@@ -21,7 +72,9 @@ const Sidebar = ({ isMenuOpen, setIsMenuOpen }) => {
 			/>
 
 			{/* Button New Chat */}
-			<button className='flex justify-center items-center w-full py-2 mt-10 text-white bg-gradient-to-r from-[#A456F7] to-[#3D81F6] text-sm rounded-md cursor-pointer'>
+			<button
+				onClick={createNewChat}
+				className='flex justify-center items-center w-full py-2 mt-10 text-white bg-gradient-to-r from-[#A456F7] to-[#3D81F6] text-sm rounded-md cursor-pointer'>
 				<span className='mr-2 text-xl'>+</span> Новый чат
 			</button>
 
@@ -75,6 +128,11 @@ const Sidebar = ({ isMenuOpen, setIsMenuOpen }) => {
 								</p>
 							</div>
 							<img
+								onClick={e =>
+									toast.promise(deleteChat(e, chat._id), {
+										loading: "Удаление...",
+									})
+								}
 								src={assets.bin_icon}
 								alt='delete'
 								className='hidden group-hover:block w-4 cursor-pointer not-dark:invert opacity-70 hover:opacity-100 transition-opacity'
@@ -156,6 +214,7 @@ const Sidebar = ({ isMenuOpen, setIsMenuOpen }) => {
 				</p>
 				{user && (
 					<img
+						onClick={logout}
 						src={assets.logout_icon}
 						alt='logout'
 						className='h-5 cursor-pointer hidden not-dark:invert group-hover:block opacity-70 hover:opacity-100 transition-opacity'

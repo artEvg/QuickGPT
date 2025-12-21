@@ -2,11 +2,23 @@ import jwt from "jsonwebtoken"
 import User from "../models/User.js"
 
 export const protect = async (req, res, next) => {
-	let token = req.headers.authorization
-
 	try {
+		let token
+		if (
+			req.headers.authorization &&
+			req.headers.authorization.startsWith("Bearer")
+		) {
+			token = req.headers.authorization.split(" ")[1]
+		} else {
+			return res.status(401).json({
+				success: false,
+				message: "Нет токена авторизации",
+			})
+		}
+
 		const decoded = jwt.verify(token, process.env.JWT_SECRET)
-		const user = await User.findById(decoded.id)
+
+		const user = await User.findById(decoded.id).select("-password")
 
 		if (!user) {
 			return res.status(401).json({
@@ -15,10 +27,18 @@ export const protect = async (req, res, next) => {
 			})
 		}
 
-		req.user = user
+		req.user = {
+			id: user._id,
+			name: user.name,
+			email: user.email,
+			credits: user.credits,
+		}
+
 		next()
 	} catch (error) {
-		return res.status(401).json({
+		console.error("❌ Protect error:", error.message)
+		res.status(401).json({
+			success: false,
 			message: "Токен не валидный",
 		})
 	}

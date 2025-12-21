@@ -10,7 +10,7 @@ const plans = [
 		credits: 100,
 		features: [
 			"✨ 100 мощных текстовых запросов",
-			"🖼️ 50 креативных генераций изображений",
+			"🖼️ 50 генераций изображений",
 			"🛡️ Надежная поддержка 24/7",
 			"🚀 Полный доступ к базовым ИИ-моделям",
 		],
@@ -43,28 +43,25 @@ const plans = [
 	},
 ]
 
-export const getPlans = async (req, res) => {
+setInterval(async () => {
 	try {
+		console.log("🔄 АВТОПРОВЕРКА запущена...")
+
 		const pendingTransactions = await Transaction.find({
 			isPaid: false,
 			yookassaPaymentId: { $exists: true },
 		})
 			.populate("userId")
 			.sort({ createdAt: -1 })
-			.limit(10)
+			.limit(20)
 
-		console.log(`🔍 Найдено НЕОПЛАЧЕННЫХ: ${pendingTransactions.length}`)
+		const shopId = process.env.YUKASSA_SHOP_ID || "1233754"
+		const secretKey =
+			process.env.YUKASSA_SECRET_KEY ||
+			"test_Lrnmshbrf0XxlwtlgId-Fv7q2kCZebvKr7sVkK60sxg"
 
-		const shopId = "1233754"
-		const secretKey = "test_Lrnmshbrf0XxlwtlgId-Fv7q2kCZebvKr7sVkK60sxg"
-
+		let updated = 0
 		for (let transaction of pendingTransactions) {
-			console.log(
-				`🔍 Проверяем: ${transaction._id
-					.toString()
-					.slice(-6)} | Платеж: ${transaction.yookassaPaymentId.slice(0, 8)}`
-			)
-
 			try {
 				const paymentStatus = await axios.get(
 					`https://api.yookassa.ru/v3/payments/${transaction.yookassaPaymentId}`,
@@ -72,9 +69,10 @@ export const getPlans = async (req, res) => {
 				)
 
 				console.log(
-					`✅ СТАТУС: ${paymentStatus.data.status} | План: ${transaction.planId}`
+					`🔍 ${transaction._id.toString().slice(-6)}: ${
+						paymentStatus.data.status
+					}`
 				)
-
 				if (paymentStatus.data.status === "succeeded") {
 					transaction.isPaid = true
 					transaction.status = "completed"
@@ -85,93 +83,110 @@ export const getPlans = async (req, res) => {
 					})
 
 					console.log(
-						`🎉 ✅ ✅ ✅ ПОБЕДА! isPaid=true | +${transaction.credits} кредитов | User: ${transaction.userId._id}`
+						`🎉 ✅ АВТО! +${transaction.credits} кредитов | План: ${transaction.planId}`
 					)
+					updated++
 				}
 			} catch (error) {
-				console.log(`❌ Платеж не найден: ${transaction.yookassaPaymentId}`)
 			}
 		}
 
-		res.json({ success: true, plans })
+		if (updated > 0) {
+			console.log(`🔥 АВТОПРОВЕРКА: Обновлено ${updated} платежей!`)
+		}
 	} catch (error) {
-		console.error("getPlans error:", error)
-		res.json({ success: true, plans })
+		console.error("Автопроверка ошибка:", error)
 	}
+}, 10000)
+
+export const getPlans = async (req, res) => {
+	res.json({ success: true, plans })
 }
 
 export const purchasePlan = async (req, res) => {
-	try {
-		const { planId } = req.body
-		const userId = req.user._id
-		const plan = plans.find(p => p._id === planId)
+  try {
+    const { planId, userId } = req.body
+    
+    console.log('🛒 Backend purchasePlan:', { planId, userId, reqUser: req.user?._id })
 
-		if (!plan) {
-			return res.status(404).json({ success: false, message: "План не найден" })
-		}
 
-		const transaction = await Transaction.create({
-			userId,
-			planId: plan._id,
-			amount: plan.price,
-			credits: plan.credits,
-			isPaid: false,
-			status: "pending",
-		})
+    if (!userId) {
+      return res.status(400).json({ 
+        success: false, 
+        message: 'userId: Path `userId` is required.' 
+      })
+    }
 
-		const shopId = process.env.YUKASSA_SHOP_ID || "1233754"
-		const secretKey =
-			process.env.YUKASSA_SECRET_KEY ||
-			"test_Lrnmshbrf0XxlwtlgId-Fv7q2kCZebvKr7sVkK60sxg"
+    const plan = plans.find(p => p._id === planId)
 
-		const idempotenceKey = `pay_${transaction._id}_${Date.now()}`
+    if (!plan) {
+      return res.status(404).json({ success: false, message: "План не найден" })
+    }
 
-		const paymentData = {
-			amount: {
-				value: plan.price.toString(),
-				currency: "RUB",
-			},
-			confirmation: {
-				type: "redirect",
-				return_url: `${
-					process.env.BASE_URL || "http://localhost:3000"
-				}/dashboard`,
-			},
-			capture: true,
-			description: `План ${plan.name} (${plan.credits} кредитов)`,
-			metadata: {
-				userId: userId.toString(),
-				transactionId: transaction._id.toString(),
-			},
-		}
 
-		const response = await axios.post(
-			`https://api.yookassa.ru/v3/payments`,
-			paymentData,
-			{
-				auth: { username: shopId, password: secretKey },
-				headers: {
-					"Idempotence-Key": idempotenceKey,
-					"Content-Type": "application/json",
-				},
-			}
-		)
+    const user = await User.findById(userId)
+    if (!user) {
+      return res.status(404).json({ success: false, message: "Пользователь не найден" })
+    }
 
-		transaction.yookassaPaymentId = response.data.id
-		await transaction.save()
+    const transaction = await Transaction.create({
+      userId,
+      planId: plan._id,
+      amount: plan.price,
+      credits: plan.credits,
+      isPaid: false,
+      status: "pending",
+    })
 
-		console.log(`✅ Создан платеж ${response.data.id} для плана ${plan.name}`)
+    const shopId = process.env.YUKASSA_SHOP_ID || "1233754"
+    const secretKey = process.env.YUKASSA_SECRET_KEY || "test_Lrnmshbrf0XxlwtlgId-Fv7q2kCZebvKr7sVkK60sxg"
 
-		res.json({
-			success: true,
-			url: response.data.confirmation.confirmation_url,
-			transactionId: transaction._id,
-		})
-	} catch (error) {
-		console.error("🚨 ОШИБКА:", error.response?.data || error.message)
-		res.status(500).json({
-			success: false,
-			message: error.response?.data?.description || error.message,
-		})
-	}
+    const idempotenceKey = `pay_${transaction._id}_${Date.now()}`
+
+    const paymentData = {
+      amount: {
+        value: plan.price.toString(),
+        currency: "RUB",
+      },
+      confirmation: {
+        type: "redirect",
+        return_url: `${process.env.BASE_URL || "http://localhost:3000"}/dashboard`,
+      },
+      capture: true,
+      description: `План ${plan.name} (${plan.credits} кредитов)`,
+      metadata: {
+        userId: userId.toString(),
+        transactionId: transaction._id.toString(),
+      },
+    }
+
+    const response = await axios.post(
+      `https://api.yookassa.ru/v3/payments`,
+      paymentData,
+      {
+        auth: { username: shopId, password: secretKey },
+        headers: {
+          "Idempotence-Key": idempotenceKey,
+          "Content-Type": "application/json",
+        },
+      }
+    )
+
+    transaction.yookassaPaymentId = response.data.id
+    await transaction.save()
+
+    console.log(`✅ Создан платеж ${response.data.id} для плана ${plan.name} (user: ${userId})`)
+
+    res.json({
+      success: true,
+      url: response.data.confirmation.confirmation_url,
+      transactionId: transaction._id,
+    })
+  } catch (error) {
+    console.error("🚨 ОШИБКА purchasePlan:", error.response?.data || error.message)
+    res.status(500).json({
+      success: false,
+      message: error.response?.data?.description || error.message,
+    })
+  }
 }

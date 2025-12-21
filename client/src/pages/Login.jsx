@@ -1,4 +1,6 @@
 import React, { useState } from "react"
+import { useAppContext } from "../context/AppContext"
+import toast from "react-hot-toast"
 
 const Login = () => {
 	const [state, setState] = useState("login")
@@ -6,10 +8,31 @@ const Login = () => {
 	const [email, setEmail] = useState("")
 	const [password, setPassword] = useState("")
 	const [isLoading, setIsLoading] = useState(false)
+	const { axios, setToken } = useAppContext()
 
 	const handleSubmit = async e => {
 		e.preventDefault()
 		setIsLoading(true)
+
+		const url = state === "login" ? "/api/user/login" : "/api/user/register"
+		const payload =
+			state === "login" ? { email, password } : { name, email, password }
+
+		try {
+			const { data } = await axios.post(url, payload)
+			if (data.success) {
+				setToken(data.token)
+				localStorage.setItem("token", data.token)
+				toast.success(state === "login" ? "Успешный вход!" : "Аккаунт создан!")
+			} else {
+				toast.error(data.message)
+			}
+		} catch (error) {
+			console.error("Login error:", error)
+			toast.error(error.response?.data?.message || "Ошибка сервера")
+		} finally {
+			setIsLoading(false)
+		}
 	}
 
 	return (
@@ -24,7 +47,10 @@ const Login = () => {
 				</div>
 			</div>
 
-			<form className='flex w-full flex-col max-w-96 bg-white/20 backdrop-blur-xl shadow-3xl rounded-3xl border border-white/30 p-8 space-y-8 relative z-10'>
+			<form
+				className='flex w-full flex-col max-w-96 bg-white/20 backdrop-blur-xl shadow-3xl rounded-3xl border border-white/30 p-8 space-y-8 relative z-10'
+				onSubmit={handleSubmit}>
+				{/* Логотип */}
 				<div className='mx-auto mb-8'>
 					<div className='mx-auto flex h-20 w-20 items-center justify-center rounded-2xl bg-gradient-to-br from-blue-500/20 to-indigo-500/20 backdrop-blur-sm border border-white/30 shadow-2xl'>
 						<svg
@@ -41,6 +67,7 @@ const Login = () => {
 						</svg>
 					</div>
 				</div>
+
 				<div className='text-center'>
 					<h2 className='text-4xl font-medium text-white/95 mb-3 drop-shadow-lg'>
 						{state === "login" ? "Вход" : "Регистрация"}
@@ -52,7 +79,7 @@ const Login = () => {
 					</p>
 				</div>
 
-				{/* Поле имени для регистрации */}
+				{/* Имя только для регистрации */}
 				{state === "register" && (
 					<div className='space-y-2'>
 						<label className='block font-medium text-white/90 text-sm'>
@@ -102,12 +129,11 @@ const Login = () => {
 				<button
 					type='submit'
 					disabled={isLoading}
-					className={`py-4 w-full cursor-pointer rounded-2xl font-semibold text-lg shadow-2xl hover:shadow-3xl transition-all duration-500 transform focus:outline-none focus:ring-4 focus:ring-indigo-400/50 active:scale-95 ${
+					className={`py-4 w-full cursor-pointer rounded-2xl font-semibold text-lg shadow-2xl hover:shadow-3xl transition-all duration-500 transform focus:outline-none focus:ring-4 focus:ring-indigo-400/50 ${
 						isLoading
 							? "bg-gray-500/50 cursor-not-allowed"
 							: "bg-gradient-to-r from-indigo-500/90 via-purple-600/90 to-pink-500/90 hover:from-indigo-600 hover:via-purple-700 hover:to-pink-600 text-white border border-white/30 backdrop-blur-md"
-					}`}
-					onClick={handleSubmit}>
+					}`}>
 					{isLoading ? (
 						<div className='flex items-center justify-center'>
 							<svg
@@ -142,45 +168,28 @@ const Login = () => {
 					<button
 						type='button'
 						onClick={() => setState(state === "login" ? "register" : "login")}
-						className='font-semibold text-indigo-300 hover:text-indigo-200 hover:underline transition-all duration-300 '>
+						className='font-semibold text-indigo-300 hover:text-indigo-200 hover:underline transition-all duration-300'>
 						{state === "register" ? "Войти" : "Зарегистрироваться"}
 					</button>
 				</p>
 
-				{/* Футер */}
-				<p className='text-xs text-center text-white pt-4 '>
+				<p className='text-xs text-center text-white pt-4'>
 					🔒 Безопасно • Конфиденциально • Быстро
 				</p>
 			</form>
 
-			<style jsx>{`
-				@keyframes blob {
-					0% {
-						transform: translate(0px, 0px) scale(1);
-					}
-					33% {
-						transform: translate(30px, -50px) scale(1.1);
-					}
-					66% {
-						transform: translate(-20px, 20px) scale(0.9);
-					}
-					100% {
-						transform: translate(0px, 0px) scale(1);
-					}
-				}
-
-				.animate-blob {
-					animation: blob 7s infinite;
-				}
-
-				.animation-delay-2000ms {
-					animation-delay: 2s;
-				}
-
-				.animation-delay-4000ms {
-					animation-delay: 4s;
-				}
-			`}</style>
+			{/* ✅ Фикс 3: Обычный style без jsx */}
+			<style>{`
+        @keyframes blob {
+          0% { transform: translate(0px, 0px) scale(1); }
+          33% { transform: translate(30px, -50px) scale(1.1); }
+          66% { transform: translate(-20px, 20px) scale(0.9); }
+          100% { transform: translate(0px, 0px) scale(1); }
+        }
+        .animate-blob { animation: blob 7s infinite; }
+        .animation-delay-2000ms { animation-delay: 2s; }
+        .animation-delay-4000ms { animation-delay: 4s; }
+      `}</style>
 		</main>
 	)
 }
