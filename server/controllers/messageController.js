@@ -4,6 +4,73 @@ import Chat from "../models/Chat.js"
 import User from "../models/User.js"
 
 export const textMessageController = async (req, res) => {
+	const sleep = ms => new Promise(resolve => setTimeout(resolve, ms))
+
+	const isTransientError = (data, status) => {
+		const msg = data?.error?.message || data?.message || ""
+		return (
+			status === 429 ||
+			status === 502 ||
+			status === 503 ||
+			msg.includes("访问量过大") ||
+			msg.includes("请您稍后再试") ||
+			msg.includes("1305") ||
+			msg.toLowerCase().includes("rate limit") ||
+			msg.toLowerCase().includes("too many requests") ||
+			msg.toLowerCase().includes("temporarily unavailable")
+		)
+	}
+
+	const callModelWithRetry = async ({ messages, model, maxRetries = 4 }) => {
+		let delay = 1000
+		let lastData = null
+		let lastStatus = null
+
+		for (let attempt = 1; attempt <= maxRetries; attempt++) {
+			try {
+				const response = await fetch(
+					"https://zenmux.ai/api/v1/chat/completions",
+					{
+						method: "POST",
+						headers: {
+							Authorization: `Bearer ${process.env.ZENMUX_API_KEY}`,
+							"Content-Type": "application/json",
+						},
+						body: JSON.stringify({
+							model,
+							messages,
+							temperature: 0.7,
+							max_tokens: 1000,
+						}),
+					},
+				)
+
+				lastStatus = response.status
+				const data = await response.json().catch(() => ({}))
+				lastData = data
+
+				const replyContent = data?.choices?.[0]?.message?.content?.trim()
+				if (response.ok && replyContent) {
+					return { ok: true, data, status: response.status }
+				}
+
+				if (!isTransientError(data, response.status)) {
+					return { ok: false, data, status: response.status }
+				}
+			} catch (error) {
+				lastData = { error: { message: error?.message || "Network error" } }
+			}
+
+			if (attempt < maxRetries) {
+				const jitter = Math.floor(Math.random() * 300)
+				await sleep(delay + jitter)
+				delay *= 2
+			}
+		}
+
+		return { ok: false, data: lastData, status: lastStatus }
+	}
+
 	try {
 		const userId = req.user.id.toString()
 		const { chatId, prompt } = req.body
@@ -31,21 +98,19 @@ export const textMessageController = async (req, res) => {
 			return res.json({ success: false, message: "Chat not found" })
 		}
 
-		const userMessage = {
+		chat.messages.push({
 			role: "user",
 			content: prompt.trim(),
 			timestamp: Date.now(),
 			isImage: false,
 			isPublished: false,
-		}
-
-		chat.messages.push(userMessage)
+		})
 
 		const messages = [
 			{
 				role: "system",
 				content:
-					"Ты полезный универсальный ассистент. Отвечай по-русски. Ты умеешь помогать с вопросами о погоде, коде, общении, объяснениями и другими темами. Не выдумывай факты. Если не знаешь точный ответ, честно скажи об этом.",
+					"Ты полезный универсальный ассистент. Отвечай по-русски. Помогай с погодой, кодом, общением и другими вопросами. Не выдумывай факты. Если точной информации нет, честно скажи об этом.",
 			},
 			...chat.messages
 				.filter(m => typeof m.content === "string" && m.content.trim())
@@ -55,35 +120,19 @@ export const textMessageController = async (req, res) => {
 				})),
 		]
 
-		const response = await fetch("https://zenmux.ai/api/v1/chat/completions", {
-			method: "POST",
-			headers: {
-				Authorization: `Bearer ${process.env.ZENMUX_API_KEY}`,
-				"Content-Type": "application/json",
-			},
-			body: JSON.stringify({
-				model: "z-ai/glm-4.7-flash-free",
-				messages,
-				temperature: 0.7,
-				max_tokens: 1000,
-			}),
+		const result = await callModelWithRetry({
+			messages,
+			model: "z-ai/glm-4.7-flash-free",
+			maxRetries: 4,
 		})
 
-		const data = await response.json()
-
-		if (!response.ok) {
-			return res.json({
-				success: false,
-				message: data?.error?.message || "Ошибка от модели",
-			})
-		}
-
-		const replyContent = data?.choices?.[0]?.message?.content?.trim()
+		const replyContent = result?.data?.choices?.[0]?.message?.content?.trim()
 
 		if (!replyContent) {
 			return res.json({
 				success: false,
-				message: "Не удалось получить ответ от модели",
+				message:
+					result?.data?.error?.message || "Не удалось получить ответ от модели",
 			})
 		}
 
@@ -101,7 +150,7 @@ export const textMessageController = async (req, res) => {
 
 		return res.json({ success: true, reply })
 	} catch (error) {
-		console.error("GLM-4.7-Flash error:", error)
+		console.error("Assistant error:", error)
 		return res.json({
 			success: false,
 			message: error?.message || "Ошибка при генерации ответа",
