@@ -15,6 +15,13 @@ export const textMessageController = async (req, res) => {
 			})
 		}
 
+		if (!prompt?.trim()) {
+			return res.json({
+				success: false,
+				message: "Пустой запрос",
+			})
+		}
+
 		if (!mongoose.Types.ObjectId.isValid(chatId)) {
 			return res.json({ success: false, message: "Invalid chat ID" })
 		}
@@ -26,7 +33,7 @@ export const textMessageController = async (req, res) => {
 
 		const userMessage = {
 			role: "user",
-			content: prompt,
+			content: prompt.trim(),
 			timestamp: Date.now(),
 			isImage: false,
 			isPublished: false,
@@ -38,12 +45,14 @@ export const textMessageController = async (req, res) => {
 			{
 				role: "system",
 				content:
-					"Ты полезный ассистент. Отвечай по-русски, кратко и по делу. Не добавляй рекламу, маркетинг или выдуманные утверждения. Если не знаешь ответ, честно скажи об этом.",
+					"Ты полезный универсальный ассистент. Отвечай по-русски. Ты умеешь помогать с вопросами о погоде, коде, общении, объяснениями и другими темами. Не выдумывай факты. Если не знаешь точный ответ, честно скажи об этом.",
 			},
-			...chat.messages.map(m => ({
-				role: m.role,
-				content: m.content,
-			})),
+			...chat.messages
+				.filter(m => typeof m.content === "string" && m.content.trim())
+				.map(m => ({
+					role: m.role,
+					content: m.content,
+				})),
 		]
 
 		const response = await fetch("https://zenmux.ai/api/v1/chat/completions", {
@@ -62,33 +71,40 @@ export const textMessageController = async (req, res) => {
 
 		const data = await response.json()
 
-		const replyContent = data?.choices?.[0]?.message?.content?.trim()
-
-		if (response.ok && replyContent) {
-			const reply = {
-				role: "assistant",
-				content: replyContent,
-				timestamp: Date.now(),
-				isImage: false,
-				isPublished: false,
-			}
-
-			chat.messages.push(reply)
-			await chat.save()
-			await User.updateOne({ _id: req.user.id }, { $inc: { credits: -1 } })
-
-			return res.json({ success: true, reply })
+		if (!response.ok) {
+			return res.json({
+				success: false,
+				message: data?.error?.message || "Ошибка от модели",
+			})
 		}
 
-		return res.json({
-			success: false,
-			message: "Не удалось получить ответ от модели",
-		})
+		const replyContent = data?.choices?.[0]?.message?.content?.trim()
+
+		if (!replyContent) {
+			return res.json({
+				success: false,
+				message: "Не удалось получить ответ от модели",
+			})
+		}
+
+		const reply = {
+			role: "assistant",
+			content: replyContent,
+			timestamp: Date.now(),
+			isImage: false,
+			isPublished: false,
+		}
+
+		chat.messages.push(reply)
+		await chat.save()
+		await User.updateOne({ _id: req.user.id }, { $inc: { credits: -1 } })
+
+		return res.json({ success: true, reply })
 	} catch (error) {
-		console.error("MiMo-V2-Flash error:", error)
+		console.error("GLM-4.7-Flash error:", error)
 		return res.json({
 			success: false,
-			message: "Ошибка при генерации ответа",
+			message: error?.message || "Ошибка при генерации ответа",
 		})
 	}
 }
