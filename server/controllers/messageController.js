@@ -4,92 +4,93 @@ import Chat from "../models/Chat.js"
 import User from "../models/User.js"
 
 export const textMessageController = async (req, res) => {
-  try {
-    const userId = req.user.id.toString()
-    console.log("📝 textMessage: userId=", userId, "chatId=", req.body.chatId)
-    
-    if (req.user.credits < 1) {
-      return res.json({ success: false, message: "У вас недостаточно кредитов" })
-    }
+	try {
+		const userId = req.user.id.toString()
+		const { chatId, prompt } = req.body
 
-    const { chatId, prompt } = req.body
-    if (!mongoose.Types.ObjectId.isValid(chatId)) {
-      return res.json({ success: false, message: "Invalid chat ID" })
-    }
+		if (req.user.credits < 1) {
+			return res.json({
+				success: false,
+				message: "У вас недостаточно кредитов",
+			})
+		}
 
-    const chat = await Chat.findOne({ 
-      userId: userId,
-      _id: chatId 
-    })
-    
-    if (!chat) {
-      return res.json({ success: false, message: "Chat not found" })
-    }
+		if (!mongoose.Types.ObjectId.isValid(chatId)) {
+			return res.json({ success: false, message: "Invalid chat ID" })
+		}
 
-    chat.messages.push({
-      role: "user",
-      content: prompt,
-      timestamp: Date.now(),
-      isImage: false,
-      isPublished: false
-    })
+		const chat = await Chat.findOne({ userId, _id: chatId })
+		if (!chat) {
+			return res.json({ success: false, message: "Chat not found" })
+		}
 
-    const response = await fetch("https://zenmux.ai/api/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${process.env.ZENMUX_API_KEY}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        model: "xiaomi/mimo-v2-flash",
-        messages: [{ role: "user", content: prompt }],
-        temperature: 0.7,
-        max_tokens: 1000,
-      }),
-    })
+		const userMessage = {
+			role: "user",
+			content: prompt,
+			timestamp: Date.now(),
+			isImage: false,
+			isPublished: false,
+		}
 
-    const data = await response.json()
+		chat.messages.push(userMessage)
 
-    if (response.ok && data.choices?.[0]?.message?.content) {
-      const replyContent = data.choices[0].message.content
-      const reply = {
-        role: "assistant",
-        content: replyContent,
-        timestamp: Date.now(),
-        isImage: false,
-        isPublished: false
-      }
-      chat.messages.push(reply)
-      await chat.save()
-      await User.updateOne({ _id: req.user.id }, { $inc: { credits: -1 } })
-      return res.json({ success: true, reply })
-    }
+		const messages = [
+			{
+				role: "system",
+				content:
+					"Ты полезный ассистент. Отвечай по-русски, кратко и по делу. Не добавляй рекламу, маркетинг или выдуманные утверждения. Если не знаешь ответ, честно скажи об этом.",
+			},
+			...chat.messages.map(m => ({
+				role: m.role,
+				content: m.content,
+			})),
+		]
 
-    // Fallback
-    const fallback = `🤖 **MiMo-V2-Flash (Xiaomi)**\n\n**Запрос:** "${prompt}"\n\n**Xiaomi MiMo-V2-Flash** - топ-1 open-source модель 2025!`
-    const reply = {
-      role: "assistant",
-      content: fallback,
-      timestamp: Date.now(),
-      isImage: false,
-      isPublished: false
-    }
-    chat.messages.push(reply)
-    await chat.save()
-    await User.updateOne({ _id: req.user.id }, { $inc: { credits: -1 } })
-    res.json({ success: true, reply })
-  } catch (error) {
-    console.error("MiMo-V2-Flash error:", error)
-    res.json({
-      success: true,
-      reply: {
-        role: "assistant",
-        content: `⚡ **MiMo-V2-Flash подключен!**\n\nXiaomi модель уровня Claude 4.5 Sonnet - БЕСПЛАТНО!`,
-        timestamp: Date.now(),
-        isImage: false,
-      },
-    })
-  }
+		const response = await fetch("https://zenmux.ai/api/v1/chat/completions", {
+			method: "POST",
+			headers: {
+				Authorization: `Bearer ${process.env.ZENMUX_API_KEY}`,
+				"Content-Type": "application/json",
+			},
+			body: JSON.stringify({
+				model: "xiaomi/mimo-v2-flash",
+				messages,
+				temperature: 0.7,
+				max_tokens: 1000,
+			}),
+		})
+
+		const data = await response.json()
+
+		const replyContent = data?.choices?.[0]?.message?.content?.trim()
+
+		if (response.ok && replyContent) {
+			const reply = {
+				role: "assistant",
+				content: replyContent,
+				timestamp: Date.now(),
+				isImage: false,
+				isPublished: false,
+			}
+
+			chat.messages.push(reply)
+			await chat.save()
+			await User.updateOne({ _id: req.user.id }, { $inc: { credits: -1 } })
+
+			return res.json({ success: true, reply })
+		}
+
+		return res.json({
+			success: false,
+			message: "Не удалось получить ответ от модели",
+		})
+	} catch (error) {
+		console.error("MiMo-V2-Flash error:", error)
+		return res.json({
+			success: false,
+			message: "Ошибка при генерации ответа",
+		})
+	}
 }
 
 export const imageMessageController = async (req, res) => {
