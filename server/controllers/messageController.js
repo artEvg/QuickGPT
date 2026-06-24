@@ -123,9 +123,9 @@ export const textMessageController = async (req, res) => {
 		]
 
 		const result = await requestModel({
-			model: "z-ai/glm-4.6v-flash-free",
+			model: "z-ai/glm-4.7-flash-free",
 			messages,
-			timeoutMs: 12000,
+			timeoutMs: 20000,
 		})
 
 		const replyContent = result?.data?.choices?.[0]?.message?.content?.trim()
