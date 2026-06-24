@@ -27,7 +27,7 @@ export const textMessageController = async (req, res) => {
 
 		try {
 			const response = await fetch(
-				"https://models.github.ai/inference/chat/completions",
+				"https://openrouter.ai/api/v1/chat/completions",
 				{
 					method: "POST",
 					headers: {
@@ -123,7 +123,7 @@ export const textMessageController = async (req, res) => {
 		]
 
 		const result = await requestModel({
-			model: "gpt-4-1",
+			model: "nvidia/nemotron-3-ultra-550b-a55b:free",
 			messages,
 			timeoutMs: 50000,
 		})
