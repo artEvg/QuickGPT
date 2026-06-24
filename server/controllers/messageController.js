@@ -26,20 +26,23 @@ export const textMessageController = async (req, res) => {
 		const timeoutId = setTimeout(() => controller.abort(), timeoutMs)
 
 		try {
-			const response = await fetch("https://api.ofox.ai/v1/chat/completions", {
-				method: "POST",
-				headers: {
-					Authorization: `Bearer ${process.env.ZENMUX_API_KEY}`,
-					"Content-Type": "application/json",
+			const response = await fetch(
+				"https://models.github.ai/inference/chat/completions",
+				{
+					method: "POST",
+					headers: {
+						Authorization: `Bearer ${process.env.ZENMUX_API_KEY}`,
+						"Content-Type": "application/json",
+					},
+					signal: controller.signal,
+					body: JSON.stringify({
+						model,
+						messages,
+						temperature: 0.7,
+						max_tokens: 1000,
+					}),
 				},
-				signal: controller.signal,
-				body: JSON.stringify({
-					model,
-					messages,
-					temperature: 0.7,
-					max_tokens: 1000,
-				}),
-			})
+			)
 
 			const data = await response.json().catch(() => ({}))
 			return { response, data }
@@ -120,7 +123,7 @@ export const textMessageController = async (req, res) => {
 		]
 
 		const result = await requestModel({
-			model: "z-ai/glm-4.7-flash:free",
+			model: "gpt-4-1",
 			messages,
 			timeoutMs: 50000,
 		})
