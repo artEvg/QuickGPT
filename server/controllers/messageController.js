@@ -26,7 +26,7 @@ export const textMessageController = async (req, res) => {
 		const timeoutId = setTimeout(() => controller.abort(), timeoutMs)
 
 		try {
-			const response = await fetch("https://api.ofox.ai/v1", {
+			const response = await fetch("https://api.ofox.ai/v1/chat/completions", {
 				method: "POST",
 				headers: {
 					Authorization: `Bearer ${process.env.ZENMUX_API_KEY}`,
