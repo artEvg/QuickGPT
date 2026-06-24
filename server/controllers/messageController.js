@@ -2,7 +2,6 @@ import mongoose from "mongoose"
 import axios from "axios"
 import Chat from "../models/Chat.js"
 import User from "../models/User.js"
-
 import OpenAI from "openai"
 import mongoose from "mongoose"
 import Chat from "../models/Chat.js"

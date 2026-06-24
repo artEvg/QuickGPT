@@ -20,6 +20,7 @@
 		"express": "^5.2.1",
 		"jsonwebtoken": "^9.0.3",
 		"mongoose": "^9.0.2",
+		"openai": "^6.44.0",
 		"robokassa": "^0.0.4",
 		"svix": "^1.82.0",
 		"uuid": "^13.0.0"
