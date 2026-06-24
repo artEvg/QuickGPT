@@ -3,76 +3,17 @@ import axios from "axios"
 import Chat from "../models/Chat.js"
 import User from "../models/User.js"
 
+import OpenAI from "openai"
+import mongoose from "mongoose"
+import Chat from "../models/Chat.js"
+import User from "../models/User.js"
+
+const openai = new OpenAI({
+	baseURL: "https://generativelanguage.googleapis.com/v1beta",
+	apiKey: process.env.ZENMUX_API_KEY,
+})
+
 export const textMessageController = async (req, res) => {
-	const sleep = ms => new Promise(resolve => setTimeout(resolve, ms))
-
-	const isTransientError = (data, status) => {
-		const msg = data?.error?.message || data?.message || ""
-		return (
-			status === 429 ||
-			status === 502 ||
-			status === 503 ||
-			msg.includes("访问量过大") ||
-			msg.includes("请您稍后再试") ||
-			msg.includes("1305") ||
-			msg.toLowerCase().includes("rate limit") ||
-			msg.toLowerCase().includes("too many requests") ||
-			msg.toLowerCase().includes("temporarily unavailable")
-		)
-	}
-
-	const requestModel = async ({ model, messages, timeoutMs = 12000 }) => {
-		const controller = new AbortController()
-		const timeoutId = setTimeout(() => controller.abort(), timeoutMs)
-
-		try {
-			const response = await fetch(
-				"https://openrouter.ai/api/v1/chat/completions",
-				{
-					method: "POST",
-					headers: {
-						Authorization: `Bearer ${process.env.ZENMUX_API_KEY}`,
-						"Content-Type": "application/json",
-					},
-					signal: controller.signal,
-					body: JSON.stringify({
-						model,
-						messages,
-						temperature: 0.7,
-						max_tokens: 1000,
-					}),
-				},
-			)
-
-			const data = await response.json().catch(() => ({}))
-			return { response, data }
-		} catch (error) {
-			if (error?.name === "AbortError") {
-				return {
-					response: null,
-					data: {
-						error: {
-							message: "Request timed out",
-							code: "TIMEOUT",
-						},
-					},
-				}
-			}
-
-			return {
-				response: null,
-				data: {
-					error: {
-						message: error?.message || "Network error",
-						code: "NETWORK_ERROR",
-					},
-				},
-			}
-		} finally {
-			clearTimeout(timeoutId)
-		}
-	}
-
 	try {
 		const userId = req.user.id.toString()
 		const { chatId, prompt } = req.body
@@ -92,12 +33,18 @@ export const textMessageController = async (req, res) => {
 		}
 
 		if (!mongoose.Types.ObjectId.isValid(chatId)) {
-			return res.json({ success: false, message: "Invalid chat ID" })
+			return res.json({
+				success: false,
+				message: "Invalid chat ID",
+			})
 		}
 
 		const chat = await Chat.findOne({ userId, _id: chatId })
 		if (!chat) {
-			return res.json({ success: false, message: "Chat not found" })
+			return res.json({
+				success: false,
+				message: "Chat not found",
+			})
 		}
 
 		chat.messages.push({
@@ -122,19 +69,19 @@ export const textMessageController = async (req, res) => {
 				})),
 		]
 
-		const result = await requestModel({
-			model: "nvidia/nemotron-3-ultra-550b-a55b:free",
+		const completion = await openai.chat.completions.create({
+			model: "gemini-3-5-flash",
 			messages,
-			timeoutMs: 50000,
+			temperature: 0.7,
+			max_tokens: 1000,
 		})
 
-		const replyContent = result?.data?.choices?.[0]?.message?.content?.trim()
+		const replyContent = completion?.choices?.[0]?.message?.content?.trim()
 
-		if (!result.response?.ok || !replyContent) {
+		if (!replyContent) {
 			return res.json({
 				success: false,
-				message:
-					result?.data?.error?.message || "Не удалось получить ответ от модели",
+				message: "Не удалось получить ответ от модели",
 			})
 		}
 
