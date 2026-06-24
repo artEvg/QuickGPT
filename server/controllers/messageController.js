@@ -3,8 +3,6 @@ import axios from "axios"
 import Chat from "../models/Chat.js"
 import User from "../models/User.js"
 import OpenAI from "openai"
-import Chat from "../models/Chat.js"
-import User from "../models/User.js"
 
 const openai = new OpenAI({
 	baseURL: "https://generativelanguage.googleapis.com/v1beta",
