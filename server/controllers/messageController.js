@@ -26,23 +26,20 @@ export const textMessageController = async (req, res) => {
 		const timeoutId = setTimeout(() => controller.abort(), timeoutMs)
 
 		try {
-			const response = await fetch(
-				"https://zenmux.ai/api/v1/chat/completions",
-				{
-					method: "POST",
-					headers: {
-						Authorization: `Bearer ${process.env.ZENMUX_API_KEY}`,
-						"Content-Type": "application/json",
-					},
-					signal: controller.signal,
-					body: JSON.stringify({
-						model,
-						messages,
-						temperature: 0.7,
-						max_tokens: 1000,
-					}),
+			const response = await fetch("https://api.ofox.ai/v1", {
+				method: "POST",
+				headers: {
+					Authorization: `Bearer ${process.env.ZENMUX_API_KEY}`,
+					"Content-Type": "application/json",
 				},
-			)
+				signal: controller.signal,
+				body: JSON.stringify({
+					model,
+					messages,
+					temperature: 0.7,
+					max_tokens: 1000,
+				}),
+			})
 
 			const data = await response.json().catch(() => ({}))
 			return { response, data }
@@ -123,9 +120,9 @@ export const textMessageController = async (req, res) => {
 		]
 
 		const result = await requestModel({
-			model: "z-ai/glm-4.7-flash-free",
+			model: "z-ai/glm-4.7-flash:free",
 			messages,
-			timeoutMs: 20000,
+			timeoutMs: 50000,
 		})
 
 		const replyContent = result?.data?.choices?.[0]?.message?.content?.trim()
