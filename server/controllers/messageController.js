@@ -53,7 +53,7 @@ export const textMessageController = async (req, res) => {
 				"Content-Type": "application/json",
 			},
 			body: JSON.stringify({
-				model: "xiaomi/mimo-v2-flash",
+				model: "z-ai/glm-4.7-flash-free",
 				messages,
 				temperature: 0.7,
 				max_tokens: 1000,
