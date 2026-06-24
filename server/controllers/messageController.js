@@ -21,54 +21,56 @@ export const textMessageController = async (req, res) => {
 		)
 	}
 
-	const callModelWithRetry = async ({ messages, model, maxRetries = 4 }) => {
-		let delay = 1000
-		let lastData = null
-		let lastStatus = null
+	const requestModel = async ({ model, messages, timeoutMs = 12000 }) => {
+		const controller = new AbortController()
+		const timeoutId = setTimeout(() => controller.abort(), timeoutMs)
 
-		for (let attempt = 1; attempt <= maxRetries; attempt++) {
-			try {
-				const response = await fetch(
-					"https://zenmux.ai/api/v1/chat/completions",
-					{
-						method: "POST",
-						headers: {
-							Authorization: `Bearer ${process.env.ZENMUX_API_KEY}`,
-							"Content-Type": "application/json",
-						},
-						body: JSON.stringify({
-							model,
-							messages,
-							temperature: 0.7,
-							max_tokens: 1000,
-						}),
+		try {
+			const response = await fetch(
+				"https://zenmux.ai/api/v1/chat/completions",
+				{
+					method: "POST",
+					headers: {
+						Authorization: `Bearer ${process.env.ZENMUX_API_KEY}`,
+						"Content-Type": "application/json",
 					},
-				)
+					signal: controller.signal,
+					body: JSON.stringify({
+						model,
+						messages,
+						temperature: 0.7,
+						max_tokens: 1000,
+					}),
+				},
+			)
 
-				lastStatus = response.status
-				const data = await response.json().catch(() => ({}))
-				lastData = data
-
-				const replyContent = data?.choices?.[0]?.message?.content?.trim()
-				if (response.ok && replyContent) {
-					return { ok: true, data, status: response.status }
+			const data = await response.json().catch(() => ({}))
+			return { response, data }
+		} catch (error) {
+			if (error?.name === "AbortError") {
+				return {
+					response: null,
+					data: {
+						error: {
+							message: "Request timed out",
+							code: "TIMEOUT",
+						},
+					},
 				}
-
-				if (!isTransientError(data, response.status)) {
-					return { ok: false, data, status: response.status }
-				}
-			} catch (error) {
-				lastData = { error: { message: error?.message || "Network error" } }
 			}
 
-			if (attempt < maxRetries) {
-				const jitter = Math.floor(Math.random() * 300)
-				await sleep(delay + jitter)
-				delay *= 2
+			return {
+				response: null,
+				data: {
+					error: {
+						message: error?.message || "Network error",
+						code: "NETWORK_ERROR",
+					},
+				},
 			}
+		} finally {
+			clearTimeout(timeoutId)
 		}
-
-		return { ok: false, data: lastData, status: lastStatus }
 	}
 
 	try {
@@ -120,15 +122,15 @@ export const textMessageController = async (req, res) => {
 				})),
 		]
 
-		const result = await callModelWithRetry({
+		const result = await requestModel({
+			model: "z-ai/glm-4.6v-flash-free",
 			messages,
-			model: "z-ai/glm-4.7-flash-free",
-			maxRetries: 4,
+			timeoutMs: 12000,
 		})
 
 		const replyContent = result?.data?.choices?.[0]?.message?.content?.trim()
 
-		if (!replyContent) {
+		if (!result.response?.ok || !replyContent) {
 			return res.json({
 				success: false,
 				message:
