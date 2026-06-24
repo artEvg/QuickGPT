@@ -5,7 +5,7 @@ import User from "../models/User.js"
 import OpenAI from "openai"
 
 const openai = new OpenAI({
-	baseURL: "https://generativelanguage.googleapis.com/v1beta",
+	baseURL: "https://generativelanguage.googleapis.com/v1beta/openai/",
 	apiKey: process.env.ZENMUX_API_KEY,
 })
 
@@ -22,25 +22,16 @@ export const textMessageController = async (req, res) => {
 		}
 
 		if (!prompt?.trim()) {
-			return res.json({
-				success: false,
-				message: "Пустой запрос",
-			})
+			return res.json({ success: false, message: "Пустой запрос" })
 		}
 
 		if (!mongoose.Types.ObjectId.isValid(chatId)) {
-			return res.json({
-				success: false,
-				message: "Invalid chat ID",
-			})
+			return res.json({ success: false, message: "Invalid chat ID" })
 		}
 
 		const chat = await Chat.findOne({ userId, _id: chatId })
 		if (!chat) {
-			return res.json({
-				success: false,
-				message: "Chat not found",
-			})
+			return res.json({ success: false, message: "Chat not found" })
 		}
 
 		chat.messages.push({
@@ -66,7 +57,7 @@ export const textMessageController = async (req, res) => {
 		]
 
 		const completion = await openai.chat.completions.create({
-			model: "gemini-3-5-flash",
+			model: "gemini-1.5-flash",
 			messages,
 			temperature: 0.7,
 			max_tokens: 1000,
